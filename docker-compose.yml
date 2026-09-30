@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # 1. FRONTEND: Interfaz de Usuario aislada
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "80:80"
+    networks:
+      - dbshield-net
+    depends_on:
+      - backend
+
+  # 2. BACKEND (Antivirus/Motor): Lógica de escaneo y API
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://internal-db:5432/dbshield
+      - SPRING_DATASOURCE_USERNAME=dbshield_user
+      - SPRING_DATASOURCE_PASSWORD=supersecret
+      # Secretos adicionales como JWT_SECRET irían aquí
+    networks:
+      - dbshield-net
+    depends_on:
+      internal-db:
+        condition: service_healthy # Espera a que la BD esté lista
+
+  # 3. INTERNAL-DB: Base de datos exclusiva para la administración
+  internal-db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=dbshield
+      - POSTGRES_USER=dbshield_user
+      - POSTGRES_PASSWORD=supersecret
+    volumes:
+      - internal-db-data:/var/lib/postgresql/data
+      # - ./db/init:/docker-entrypoint-initdb.d # Opcional: para scripts iniciales
+    networks:
+      - dbshield-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbshield_user -d dbshield"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # PERFIL DEMO: BDs Externas de clientes para pruebas (Postgres y MySQL)
+  # Se levantan con: docker compose --profile demo up
+  # ==========================================
+  demo-pg:
+    image: postgres:14-alpine
+    profiles: ["demo"]
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=client_pg
+      - POSTGRES_USER=client_user
+      - POSTGRES_PASSWORD=client_pass
+    networks:
+      - dbshield-net
+
+  demo-mysql:
+    image: mysql:8.0
+    profiles: ["demo"]
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_DATABASE=client_mysql
+      - MYSQL_USER=client_user
+      - MYSQL_PASSWORD=client_pass
+      - MYSQL_ROOT_PASSWORD=root_pass
+    networks:
+      - dbshield-net
+
+networks:
+  dbshield-net:
+    driver: bridge # Red interna compartida y aislada del exterior
+
+volumes:
+  internal-db-data:
+    driver: local

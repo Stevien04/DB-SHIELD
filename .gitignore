@@ -1,0 +1,8 @@
+node_modules/
+target/
+*.zip
+node_env/
+apache-maven-*/
+jdk-*/
+.env
+Prompt.txt
