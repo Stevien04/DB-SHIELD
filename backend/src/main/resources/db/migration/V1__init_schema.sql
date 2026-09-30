@@ -11,4 +11,4 @@ CREATE TABLE users (
 );
 -- Hash BCrypt para 'admin123'
 INSERT INTO users (username, password, full_name, country, city, phone, role, is_active)
-VALUES ('admin', '$2a$10$u24yA6B1A8X7v9h8nNn81uM3p7F4k9G0M0mD8sF8e2E0v0l7p8e0W', 'Administrador', 'CO', 'Bogota', '3000000000', 'ADMIN_DBA', true);
+VALUES ('admin', '$2a$10$CwiMtRKfrLOSXUD14CTXlu2K5.insv/2Z4heUTP7IelRbvWStaFXm', 'Administrador', 'CO', 'Bogota', '3000000000', 'ADMIN_DBA', true);
