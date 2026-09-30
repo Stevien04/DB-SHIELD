@@ -23,6 +23,7 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://internal-db:5432/dbshield
       - SPRING_DATASOURCE_USERNAME=dbshield_user
       - SPRING_DATASOURCE_PASSWORD=supersecret
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
       # Secretos adicionales como JWT_SECRET irían aquí
     networks:
       - dbshield-net
@@ -86,3 +87,4 @@ networks:
 volumes:
   internal-db-data:
     driver: local
+
