@@ -10,6 +10,9 @@ interface User {
 }
 
 interface UserDbStats {
+    id: number;
+    role: string;
+    isActive: boolean;
     email: string;
     dbCount: number;
     totalThreatsBlocked: number;
@@ -25,6 +28,8 @@ export default function AdminPanel() {
     const [stats, setStats] = useState<UserDbStats[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedUser, setSelectedUser] = useState<UserDbStats | null>(null);
+    const [historyUser, setHistoryUser] = useState<UserDbStats | null>(null);
+    const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
     // Estados para control de recursos por BD
     const [limitingDb, setLimitingDb] = useState<any | null>(null);
@@ -39,7 +44,7 @@ export default function AdminPanel() {
 
     // Estados para funciones avanzadas de ciberseguridad
     const [panicMode, setPanicMode] = useState(false);
-    const [bannedUsers, setBannedUsers] = useState<Record<string, boolean>>({});
+    
 
     useEffect(() => {
         // Simulador de consumo del motor heurístico en vivo
@@ -90,6 +95,9 @@ export default function AdminPanel() {
                     const bw = dbs.length > 0 ? (dbs.length * 1.2 + 0.5).toFixed(2) + ' GB' : '0.00 GB';
 
                     return {
+                        id: u.id,
+                        role: u.role,
+                        isActive: u.isActive,
                         email: u.username,
                         dbCount: dbs.length,
                         totalThreatsBlocked: totalThreats,
@@ -120,8 +128,34 @@ export default function AdminPanel() {
         }
     };
 
-    const toggleBan = (email: string) => {
-        setBannedUsers(prev => ({ ...prev, [email]: !prev[email] }));
+    const toggleBan = async (user: UserDbStats) => {
+        try {
+            await api.put(`/users/${user.id}`, { role: user.role, isActive: !user.isActive });
+            setStats(prev => prev.map(s => s.id === user.id ? { ...s, isActive: !user.isActive } : s));
+        } catch(e) {
+            console.error("Error toggling ban", e);
+        }
+    };
+
+    const changeRole = async (user: UserDbStats, newRole: string) => {
+        try {
+            await api.put(`/users/${user.id}`, { role: newRole, isActive: user.isActive });
+            setStats(prev => prev.map(s => s.id === user.id ? { ...s, role: newRole } : s));
+            alert("Rol actualizado correctamente.");
+        } catch(e) {
+            console.error("Error changing role", e);
+        }
+    };
+
+    const fetchHistory = async (user: UserDbStats) => {
+        try {
+            const { data } = await api.get('/audit-log');
+            const filtered = data.filter((log: any) => log.username === user.email);
+            setAuditLogs(filtered);
+            setHistoryUser(user);
+        } catch(e) {
+            console.error("Error fetching history", e);
+        }
     };
 
     const filteredStats = stats.filter(s => 
@@ -272,12 +306,21 @@ export default function AdminPanel() {
                         </thead>
                         <tbody>
                             {filteredStats.map((stat, idx) => {
-                                const isBanned = bannedUsers[stat.email];
+                                const isBanned = !stat.isActive;
                                 return (
                                 <tr key={idx} style={{ transition: 'background 0.2s', opacity: isBanned ? 0.6 : 1 }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                     <td style={{ padding: '1.2rem 1rem', borderBottom: '1px solid #e2e8f0', fontWeight: 'bold', color: isBanned ? '#ef4444' : '#334155' }}>
                                         {stat.email}
-                                        {stat.email === 'admin' && <span style={{ marginLeft: '10px', background: '#3b82f6', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>Admin</span>}
+                                        <span style={{ marginLeft: '10px', background: '#3b82f6', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', cursor: 'pointer' }} onClick={() => {
+                                            if(stat.email !== 'admin') {
+                                                const newRole = prompt("Nuevo rol (ADMIN_DBA o CLIENT):", stat.role);
+                                                if (newRole && (newRole === 'ADMIN_DBA' || newRole === 'CLIENT')) {
+                                                    changeRole(stat, newRole);
+                                                }
+                                            }
+                                        }}>
+                                            {stat.role === 'ADMIN_DBA' ? 'Admin' : 'Cliente'} ✎
+                                        </span>
                                         {isBanned && <span style={{ marginLeft: '10px', background: '#ef4444', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem' }}>Suspendido</span>}
                                     </td>
                                     <td style={{ padding: '1.2rem 1rem', borderBottom: '1px solid #e2e8f0', textAlign: 'center', color: '#0f172a', fontWeight: 'bold' }}>
@@ -294,12 +337,18 @@ export default function AdminPanel() {
                                             >
                                                 <Eye size={16} /> Ver BDs
                                             </button>
+                                            <button 
+                                                onClick={() => fetchHistory(stat)}
+                                                style={{ background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 'bold', fontSize: '0.85rem' }}
+                                            >
+                                                <Activity size={16} /> Historial
+                                            </button>
                                             {stat.email !== 'admin' && (
                                                 <button 
-                                                    onClick={() => toggleBan(stat.email)}
-                                                    style={{ background: isBanned ? '#fef2f2' : '#fff1f2', color: '#ef4444', border: '1px solid #fecaca', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 'bold', fontSize: '0.85rem' }}
+                                                    onClick={() => toggleBan(stat)}
+                                                    style={{ background: isBanned ? '#ecfdf5' : '#fff1f2', color: isBanned ? '#10b981' : '#ef4444', border: `1px solid ${isBanned ? '#a7f3d0' : '#fecaca'}`, padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 'bold', fontSize: '0.85rem' }}
                                                 >
-                                                    <Ban size={16} /> {isBanned ? 'Reactivar' : 'Banear'}
+                                                    {isBanned ? <><Unlock size={16} /> Reactivar</> : <><Ban size={16} /> Banear</>}
                                                 </button>
                                             )}
                                         </div>
@@ -354,8 +403,8 @@ export default function AdminPanel() {
                                             let dbRamValue = baseRam + Math.random() * 4 - 2;
                                             if (dbRamValue > limits.ram) dbRamValue = limits.ram - Math.random() * 2;
                                             
-                                            const dbCpuStr = panicMode || bannedUsers[selectedUser.email] ? "0.0" : dbCpu.toFixed(1);
-                                            const dbRamStr = panicMode || bannedUsers[selectedUser.email] ? "0" : dbRamValue.toFixed(0);
+                                            const dbCpuStr = panicMode || !selectedUser.isActive ? "0.0" : dbCpu.toFixed(1);
+                                            const dbRamStr = panicMode || !selectedUser.isActive ? "0" : dbRamValue.toFixed(0);
                                             
                                             return (
                                             <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -380,7 +429,7 @@ export default function AdminPanel() {
                                                         <span style={{ display: 'inline-block', padding: '4px 12px', background: '#fef2f2', color: '#ef4444', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold' }}>
                                                             AISLADA (LOCKDOWN)
                                                         </span>
-                                                    ) : bannedUsers[selectedUser.email] ? (
+                                                    ) : !selectedUser.isActive ? (
                                                         <span style={{ display: 'inline-block', padding: '4px 12px', background: '#fef2f2', color: '#ef4444', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold' }}>
                                                             BLOQUEADA
                                                         </span>
@@ -397,8 +446,8 @@ export default function AdminPanel() {
                                                             setCpuLimit(dbLimits[db.name]?.cpu || 10);
                                                             setRamLimit(dbLimits[db.name]?.ram || 256);
                                                         }}
-                                                        disabled={panicMode || bannedUsers[selectedUser.email]}
-                                                        style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', padding: '6px 12px', borderRadius: '6px', cursor: (panicMode || bannedUsers[selectedUser.email]) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem', opacity: (panicMode || bannedUsers[selectedUser.email]) ? 0.5 : 1 }}
+                                                        disabled={panicMode || !selectedUser.isActive}
+                                                        style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', padding: '6px 12px', borderRadius: '6px', cursor: (panicMode || !selectedUser.isActive) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem', opacity: (panicMode || !selectedUser.isActive) ? 0.5 : 1 }}
                                                     >
                                                         <Settings size={14} /> Asignar
                                                     </button>
@@ -483,6 +532,49 @@ export default function AdminPanel() {
                             >
                                 Aplicar Límites
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Historial */}
+            {historyUser && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                    <div style={{ backgroundColor: 'white', borderRadius: '16px', width: '95%', maxWidth: '800px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                        <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                            <h2 style={{ margin: 0, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <Activity size={24} color="#3b82f6" /> 
+                                Historial de {historyUser.email}
+                            </h2>
+                            <button onClick={() => setHistoryUser(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div style={{ padding: '2rem', maxHeight: '500px', overflowY: 'auto' }}>
+                            {auditLogs.length > 0 ? (
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr style={{ background: '#f1f5f9', color: '#475569', textAlign: 'left' }}>
+                                            <th style={{ padding: '10px' }}>Fecha</th>
+                                            <th style={{ padding: '10px' }}>Acción</th>
+                                            <th style={{ padding: '10px' }}>Detalles</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {auditLogs.map((log, i) => (
+                                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '10px', fontSize: '0.9rem' }}>{new Date(log.timestamp).toLocaleString()}</td>
+                                                <td style={{ padding: '10px', fontWeight: 'bold', color: '#3b82f6', fontSize: '0.9rem' }}>{log.action}</td>
+                                                <td style={{ padding: '10px', fontSize: '0.9rem' }}>{log.details}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                                    No hay historial para este usuario.
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

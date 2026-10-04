@@ -5,7 +5,6 @@ import com.dbshield.domain.model.DbType;
 import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Optional;
-@Component
 public class MockClientDatabaseAdapter implements ClientDatabaseRepositoryPort {
     @Override
     public List<ClientDatabase> findAll() { return List.of(); }

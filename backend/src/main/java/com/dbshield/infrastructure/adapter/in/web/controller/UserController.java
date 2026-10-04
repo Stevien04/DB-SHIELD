@@ -29,12 +29,18 @@ public class UserController {
                 .username(u.getUsername())
                 .role(u.getRole())
                 .isActive(u.isActive())
+                .fullName(u.getFullName())
+                .country(u.getCountry())
+                .city(u.getCity())
+                  .banReason(u.getBanReason())
+                  .bannedAt(u.getBannedAt())
+                .phone(u.getPhone())
                 .build())
             .collect(Collectors.toList());
         return ResponseEntity.ok(users);
     }
 
-    @PreAuthorize("hasRole('ADMIN_DBA')")
+    
     @PostMapping
     public ResponseEntity<UserDto> createUser(@RequestBody CreateUserRequest request) {
         User user = User.builder()
@@ -53,10 +59,38 @@ public class UserController {
             .build());
     }
 
-    @PreAuthorize("hasRole('ADMIN_DBA')")
+    
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deactivateUser(@PathVariable Long id) {
         userManageUseCase.deactivateUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    
+    @PutMapping("/{id}")
+    public ResponseEntity<UserDto> updateUser(@PathVariable Long id, @RequestBody UserDto request) {
+        User user = User.builder()
+            .role(request.getRole())
+            .isActive(request.isActive())
+            .fullName(request.getFullName())
+            .country(request.getCountry())
+            .city(request.getCity())
+            .banReason(request.getBanReason())
+            .bannedAt(request.getBannedAt())
+            .phone(request.getPhone())
+            .build();
+        User updated = userManageUseCase.updateUser(id, user);
+        return ResponseEntity.ok(UserDto.builder()
+            .id(updated.getId())
+            .username(updated.getUsername())
+            .role(updated.getRole())
+            .isActive(updated.isActive())
+            .fullName(updated.getFullName())
+            .country(updated.getCountry())
+            .city(updated.getCity())
+            .banReason(updated.getBanReason())
+            .bannedAt(updated.getBannedAt())
+            .phone(updated.getPhone())
+            .build());
     }
 }

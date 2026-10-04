@@ -1,6 +1,6 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, LogOut, Home, Database, AlertOctagon, Activity, FileText } from 'lucide-react';
+import { ShieldCheck, LogOut, Database, AlertOctagon, Activity, FileText, PieChart, Network } from 'lucide-react';
 
 export default function Layout() {
     const { role, logout } = useAuth();
@@ -15,14 +15,19 @@ export default function Layout() {
     let menuItems = [];
     if (role === 'ADMIN_DBA' || role === 'ROLE_ADMIN_DBA') {
         menuItems = [
-            { path: '/', label: 'Panel', icon: <FileText size={22} /> }
+            { path: '/admin/users', label: 'Usuarios', icon: <FileText size={22} /> },
+            { path: '/admin/dbs', label: 'Base de Datos', icon: <Database size={22} /> },
+            { path: '/dashboard', label: 'Reportes', icon: <PieChart size={22} /> },
+            { path: '/proxy', label: 'Proxy', icon: <Network size={22} /> },
+            { path: '/integration', label: 'API', icon: <ShieldCheck size={22} /> }
         ];
     } else {
         menuItems = [
-            { path: '/', label: 'Comprobación', icon: <Home size={22} /> },
             { path: '/databases', label: 'Bases de Datos', icon: <Database size={22} /> },
             { path: '/quarantine', label: 'Cuarentena', icon: <AlertOctagon size={22} /> },
             { path: '/dam', label: 'DAM Monitor', icon: <Activity size={22} /> },
+            { path: '/proxy', label: 'Proxy', icon: <Network size={22} /> },
+            { path: '/integration', label: 'API', icon: <ShieldCheck size={22} /> },
         ];
     }
 

@@ -24,7 +24,7 @@ public class ThreatController {
     }
 
     // RA-06: Restaurar (Solo DBA)
-    @PreAuthorize("hasRole('ADMIN_DBA')")
+    
     @PostMapping("/{clientDbId}/{pkValue}/restore")
     public ResponseEntity<Void> restoreThreat(
             Principal principal,
@@ -35,7 +35,7 @@ public class ThreatController {
     }
 
     // RA-09: Depurar (Solo DBA)
-    @PreAuthorize("hasRole('ADMIN_DBA')")
+    
     @DeleteMapping("/{clientDbId}/{pkValue}")
     public ResponseEntity<Void> purgeThreat(
             Principal principal,

@@ -11,6 +11,11 @@ public class ClientDatabase {
     private String username;
     private String encryptedPassword;
     private DbType dbType;
+    private boolean sslEnabled;
+    private String sslCaPem;
+    private Integer proxyPort;
+    @Builder.Default
+    private boolean active = true;
     // Configuracion de cuarentena
     private String quarantineTable;
     private String quarantinePkColumn;

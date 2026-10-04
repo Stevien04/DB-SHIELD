@@ -1,0 +1,1 @@
+package com.dbshield; import org.junit.jupiter.api.Test; import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder; public class HashTest { @Test public void testHash() { BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(); System.out.println("MATCH_RAZ: " + encoder.matches("123456", "$2a$10$RPS.b7G7oo5r5K/ZnYXrHe.Zp61NQEWIcalDtIcdS3EUkaUXDaJSC")); } }

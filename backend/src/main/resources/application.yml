@@ -4,11 +4,11 @@
   datasource:
     url: jdbc:h2:file:./dbshield;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     username: sa
-    password: password
+    password: ${LOCAL_DB_PASSWORD:}
     driver-class-name: org.h2.Driver
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
@@ -18,5 +18,5 @@ server:
   port: 8080
 
 jwt:
-  secret: 8f8a15b3e945c7b949c836dbf5f4b4650f1465bc43980123567890abcdef1234
+  secret: ${JWT_SECRET}
   expiration-ms: 86400000

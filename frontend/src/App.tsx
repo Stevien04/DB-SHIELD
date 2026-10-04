@@ -6,7 +6,10 @@ import Dashboard from './pages/Dashboard';
 import Quarantine from './pages/Quarantine';
 import DamMonitor from './pages/DamMonitor';
 import Databases from './pages/Databases';
-import AdminPanel from './pages/AdminPanel';
+import AdminUsers from './pages/AdminUsers';
+import AdminDBs from './pages/AdminDBs';
+import ProxyPanel from './pages/ProxyPanel';
+import ApiIntegration from './pages/ApiIntegration';
 
 function ProtectedRoute({ children, reqRole }: { children: JSX.Element, reqRole?: string }) {
     const { token, role } = useAuth();
@@ -15,17 +18,29 @@ function ProtectedRoute({ children, reqRole }: { children: JSX.Element, reqRole?
     return children;
 }
 
+function DefaultRoute() {
+    const { role } = useAuth();
+    if (role === 'ADMIN_DBA' || role === 'ROLE_ADMIN_DBA') {
+        return <Navigate to="/admin/users" />;
+    }
+    return <Navigate to="/databases" replace />;
+}
+
 function App() {
   return (
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<DefaultRoute />} />
           <Route path="databases" element={<Databases />} />
           <Route path="quarantine" element={<Quarantine />} />
           <Route path="dam" element={<DamMonitor />} />
-          <Route path="admin" element={<ProtectedRoute reqRole="ADMIN_DBA"><AdminPanel /></ProtectedRoute>} />
+          <Route path="proxy" element={<ProxyPanel />} />
+          <Route path="integration" element={<ApiIntegration />} />
+          <Route path="admin/users" element={<ProtectedRoute reqRole="ADMIN_DBA"><AdminUsers /></ProtectedRoute>} />
+          <Route path="admin/dbs" element={<ProtectedRoute reqRole="ADMIN_DBA"><AdminDBs /></ProtectedRoute>} />
+          <Route path="dashboard" element={<ProtectedRoute reqRole="ADMIN_DBA"><Dashboard /></ProtectedRoute>} />
         </Route>
       </Routes>
     </Router>

@@ -6,3 +6,17 @@ apache-maven-*/
 jdk-*/
 .env
 Prompt.txt
+.deploy-runtime/
+dbshield-deploy-images.tar
+dbshield-deploy-images.tar.gz
+dbshield-deploy-source.tar.gz
+dbshield-vps-backend.jar
+dbshield-monitor-backend.jar
+dbshield-monitor-html/
+monitor-*-build.log
+monitor-build.log
+ssl-test-fixture/
+dbshield-ssl-backend.jar
+dbshield-proxy-backend.jar
+dbshield-api-backend.jar
+dbshield-external-proxy-backend.jar

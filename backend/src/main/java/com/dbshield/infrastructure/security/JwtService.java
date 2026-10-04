@@ -7,13 +7,18 @@ import javax.crypto.SecretKey;
 import java.util.Date;
 @Service
 public class JwtService {
-    @Value("${jwt.secret:8f8a15b3e945c7b949c836dbf5f4b4650f1465bc43980123567890abcdef1234}")
+    @Value("${jwt.secret}")
     private String secret;
     @Value("${jwt.expiration-ms:86400000}")
     private long expirationMs;
 
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secret.getBytes());
+    }
+
+    public String verifiedUsername(String token) {
+        return Jwts.parser().verifyWith(getSigningKey()).build()
+            .parseSignedClaims(token).getPayload().getSubject();
     }
 
     public String generateToken(String username, String role) {

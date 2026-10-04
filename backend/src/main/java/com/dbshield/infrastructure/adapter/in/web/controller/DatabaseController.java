@@ -7,7 +7,6 @@ import java.sql.DriverManager;
 import java.util.Map;
 import java.util.HashMap;
 
-@RestController
 @RequestMapping("/api/v1/databases")
 @CrossOrigin("*")
 public class DatabaseController {

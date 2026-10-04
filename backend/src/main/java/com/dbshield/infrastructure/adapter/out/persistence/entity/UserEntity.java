@@ -7,6 +7,8 @@ public class UserEntity {
     private Long id;
     @Column(unique = true, nullable = false)
     private String username;
+    @Column(name = "google_subject", unique = true)
+    private String googleSubject;
     @Column(nullable = false)
     private String password;
     
@@ -20,4 +22,10 @@ public class UserEntity {
     private String role;
     @Column(nullable = false)
     private boolean isActive = true;
+    
+    @Column(name = "ban_reason")
+    private String banReason;
+    
+    @Column(name = "banned_at")
+    private java.time.LocalDateTime bannedAt;
 }

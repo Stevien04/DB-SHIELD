@@ -1,0 +1,6 @@
+[Unit]
+Description=Renovar certificado HTTPS de DB-Shield
+After=docker.service network-online.target
+[Service]
+Type=oneshot
+ExecStart=/opt/dbshield/dbshield-cert-renew.sh

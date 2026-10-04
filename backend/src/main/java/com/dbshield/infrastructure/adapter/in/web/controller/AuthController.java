@@ -6,6 +6,7 @@ import com.dbshield.infrastructure.adapter.in.web.dto.RegisterRequest;
 import com.dbshield.infrastructure.adapter.out.persistence.UserRepository;
 import com.dbshield.infrastructure.adapter.out.persistence.entity.UserEntity;
 import com.dbshield.infrastructure.security.JwtService;
+import com.dbshield.application.port.out.AuditPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -25,9 +26,10 @@ public class AuthController {
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditPort auditPort;
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest request) { if (request.getUsername().toUpperCase().contains("OR 1=1") || request.getUsername().toUpperCase().contains("SELECT ") || request.getUsername().contains("'") || request.getPassword().contains("'")) { return ResponseEntity.status(406).body(Map.of("message", "THREAT_DETECTED")); }
         Authentication authentication = authenticationManager.authenticate(
             new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
@@ -36,6 +38,7 @@ public class AuthController {
             .findFirst()
             .orElse("USER");
         String token = jwtService.generateToken(request.getUsername(), role);
+        auditPort.logAdminAction(request.getUsername(), "LOGIN", "Inicio de sesión exitoso");
         return ResponseEntity.ok(new AuthResponse(token, role));
     }
 

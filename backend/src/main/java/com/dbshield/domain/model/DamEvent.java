@@ -4,6 +4,8 @@ import lombok.Data;
 import java.time.LocalDateTime;
 @Data @Builder
 public class DamEvent {
+    private Long sessionId;
+    private LocalDateTime queryStartedAt;
     private Long databaseId;
     private String username;
     private String clientAddress;

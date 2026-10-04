@@ -1,111 +1,86 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../services/api';
 
 export interface DamEvent {
-    id: number;
+    id: number | string;
+    databaseId?: number;
+    source?: 'live' | 'manual';
     username: string;
     clientAddress: string;
     state: string;
     query: string;
     durationSeconds: number;
 }
-
 interface AuthContextType {
     token: string | null;
     role: string | null;
     login: (token: string, role: string) => void;
     logout: () => void;
-    
-    // Global DAM Monitor State
     isDamLive: boolean;
     setIsDamLive: (live: boolean) => void;
     damEvents: DamEvent[];
     setDamEvents: React.Dispatch<React.SetStateAction<DamEvent[]>>;
     damSelectedDb: string;
     setDamSelectedDb: (dbId: string) => void;
+    damError: string;
+    damLastUpdated: string;
 }
-
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-
 export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
     const [role, setRole] = useState<string | null>(localStorage.getItem('role'));
-    
-    // Estados Globales del Monitor DAM
     const [isDamLive, setIsDamLive] = useState(false);
     const [damEvents, setDamEvents] = useState<DamEvent[]>([]);
-    const [damSelectedDb, setDamSelectedDb] = useState<string>('');
-
+    const [damSelectedDb, setDamSelectedDb] = useState('');
+    const [damError, setDamError] = useState('');
+    const [damLastUpdated, setDamLastUpdated] = useState('');
     const login = (newToken: string, newRole: string) => {
-        localStorage.setItem('token', newToken);
-        localStorage.setItem('role', newRole);
-        setToken(newToken);
-        setRole(newRole);
+        localStorage.setItem('token', newToken); localStorage.setItem('role', newRole);
+        setToken(newToken); setRole(newRole);
     };
-
     const logout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('role');
-        setToken(null);
-        setRole(null);
-        setIsDamLive(false);
-        setDamEvents([]);
-        setDamSelectedDb('');
+        localStorage.removeItem('token'); localStorage.removeItem('role');
+        setToken(null); setRole(null); setIsDamLive(false);
+        setDamEvents([]); setDamSelectedDb(''); setDamError(''); setDamLastUpdated('');
     };
-
-    // Simulador Global de DAM que persiste entre cambios de pestañas
     useEffect(() => {
-        let interval: any;
-        if (isDamLive && damSelectedDb) {
-            const generateMockQuery = () => {
-                const tables = ['users', 'payments', 'sessions', 'audit_logs', 'orders'];
-                const users = ['admin', 'webapp_usr', 'reporting_role', 'etl_job'];
-                const ips = ['192.168.1.100', '10.0.0.15', '172.16.0.4', '192.168.1.200'];
-                
-                const table = tables[Math.floor(Math.random() * tables.length)];
-                const user = users[Math.floor(Math.random() * users.length)];
-                const ip = ips[Math.floor(Math.random() * ips.length)];
-                
-                const queries = [
-                    `SELECT * FROM ${table} WHERE status = 'ACTIVE' LIMIT 100;`,
-                    `UPDATE ${table} SET last_login = NOW() WHERE id = ${Math.floor(Math.random() * 1000)};`,
-                    `INSERT INTO ${table} (created_at, type) VALUES (NOW(), 'SYSTEM');`,
-                    `SELECT COUNT(1) FROM ${table};`,
-                    `BEGIN; UPDATE ${table} SET balance = balance - 100; COMMIT;`
-                ];
-                
-                return {
-                    id: Date.now() + Math.random(),
-                    username: user,
-                    clientAddress: ip,
-                    state: 'active',
-                    query: queries[Math.floor(Math.random() * queries.length)],
-                    durationSeconds: Math.random() * 0.5 + 0.01
-                };
-            };
-
-            interval = setInterval(() => {
-                const newQueriesCount = Math.floor(Math.random() * 2) + 1;
-                const newEvents = Array.from({ length: newQueriesCount }).map(generateMockQuery);
-                
-                setDamEvents(prev => [...prev, ...newEvents].slice(-50)); // Mantener los últimos 50
-            }, 1500); // Cada 1.5 segundos
+        setDamEvents(prev => prev.filter(event => String(event.databaseId) === damSelectedDb && event.source !== 'live'));
+        setDamError(''); setDamLastUpdated('');
+    }, [damSelectedDb]);
+    // Instantáneas reales; no se inventan consultas ni se conservan sesiones que ya terminaron.
+    useEffect(() => {
+        let cancelled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const controller = new AbortController();
+        if (!isDamLive || !damSelectedDb || !token) {
+            setDamEvents(prev => prev.filter(event => event.source !== 'live'));
+            return;
         }
-        
-        return () => {
-            if (interval) clearInterval(interval);
+        setDamError(''); setDamLastUpdated('');
+        const poll = async () => {
+            try {
+                const { data } = await api.get('/dam/events', { params: { databaseId: damSelectedDb }, signal: controller.signal });
+                if (cancelled) return;
+                const live: DamEvent[] = data.map((event: any) => ({
+                    id: event.databaseId + ':' + event.sessionId + ':' + (event.queryStartedAt || ''),
+                    databaseId: event.databaseId, source: 'live',
+                    username: event.username || '(sin usuario)', clientAddress: event.clientAddress || '(local)',
+                    state: event.state, query: event.query || '(consulta no visible con estos permisos)',
+                    durationSeconds: Number(event.durationSeconds)
+                }));
+                setDamEvents(prev => [...prev.filter(event => event.source !== 'live' && String(event.databaseId) === damSelectedDb).slice(-50), ...live]);
+                setDamLastUpdated(new Date().toLocaleTimeString());
+                timer = setTimeout(poll, 2000);
+            } catch (error: any) {
+                if (cancelled) return;
+                setDamError(error.response?.data?.message || 'No se pudo consultar la base seleccionada. Revisa conexión y permisos.');
+                setIsDamLive(false);
+                setDamEvents(prev => prev.filter(event => event.source !== 'live'));
+            }
         };
-    }, [isDamLive, damSelectedDb]);
-
-    return (
-        <AuthContext.Provider value={{ 
-            token, role, login, logout,
-            isDamLive, setIsDamLive,
-            damEvents, setDamEvents,
-            damSelectedDb, setDamSelectedDb
-        }}>
-            {children}
-        </AuthContext.Provider>
-    );
+        void poll();
+        return () => { cancelled = true; controller.abort(); if (timer) clearTimeout(timer); };
+    }, [isDamLive, damSelectedDb, token]);
+    return <AuthContext.Provider value={{ token, role, login, logout, isDamLive, setIsDamLive, damEvents, setDamEvents, damSelectedDb, setDamSelectedDb, damError, damLastUpdated }}>{children}</AuthContext.Provider>;
 };
-
 export const useAuth = () => useContext(AuthContext);

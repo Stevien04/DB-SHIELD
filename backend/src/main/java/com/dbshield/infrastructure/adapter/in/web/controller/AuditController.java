@@ -16,7 +16,7 @@ public class AuditController {
     private final AuditQueryUseCase auditQueryUseCase;
 
     // RA-07: Bitcora para el administrador
-    @PreAuthorize("hasRole('ADMIN_DBA')")
+    
     @GetMapping
     public ResponseEntity<List<AuditEntry>> getLogs() {
         return ResponseEntity.ok(auditQueryUseCase.listAllLogs());

@@ -14,23 +14,30 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
     private final UserDetailsServiceImpl userDetailsService;
+    private final JwtRequestFilter jwtRequestFilter;
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**", "/api/v1/users/**", "/api/v1/databases/**").permitAll()
+                .requestMatchers("/api/v1/auth/fix").denyAll()
+                .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST,"/api/v1/integration/query").permitAll()
+                .requestMatchers("/api/v1/users/**", "/api/v1/audit-log/**").hasRole("ADMIN_DBA")
                 .anyRequest().authenticated()
             )
             .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authenticationProvider(authenticationProvider());
+            .authenticationProvider(authenticationProvider())
+            .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class)
+            .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, error) -> response.sendError(401)));
         return http.build();
     }
     @Bean

@@ -1,8 +1,16 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import GoogleSignIn from '../components/GoogleSignIn';
 import { ShieldCheck, Eye, EyeOff, User, Lock, Mail, MapPin, Phone } from 'lucide-react';
+
+const locationData: Record<string, string[]> = {
+    "Perú": ["Lima", "Arequipa", "Cusco", "Piura", "Tacna"],
+    "Colombia": ["Bogotá", "Medellín", "Cali", "Cartagena"],
+    "Chile": ["Santiago", "Valparaíso", "Concepción"],
+    "México": ["CDMX", "Guadalajara", "Monterrey"]
+};
 
 export default function Login() {
     const [isRegistering, setIsRegistering] = useState(false);
@@ -22,6 +30,7 @@ export default function Login() {
     const [regPassword, setRegPassword] = useState('');
 
     const [errorMsg, setErrorMsg] = useState('');
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
     const { login } = useAuth();
     const navigate = useNavigate();
@@ -35,7 +44,7 @@ export default function Login() {
             login(data.token, data.role);
             navigate('/');
         } catch (error: any) {
-            setErrorMsg('Credenciales inválidas o error de red');
+            if (error.response?.data?.message === "THREAT_DETECTED") { setErrorMsg("¡ATAQUE BLOQUEADO! WAF interceptó intento de Inyección SQL."); } else { setErrorMsg("Credenciales inválidas"); }
         }
     };
 
@@ -44,27 +53,26 @@ export default function Login() {
         setErrorMsg('');
 
         // Validaciones
-        if (!regName.trim() || !regCountry.trim() || !regCity.trim() || !regPhone.trim() || !regEmail.trim() || !regPassword.trim()) {
-            setErrorMsg('Todos los campos son obligatorios.');
-            return;
-        }
+        const errors: Record<string, string> = {};
+        if (!regName.trim()) errors.name = 'Campo obligatorio';
+        if (!regCountry.trim()) errors.country = 'Requerido';
+        if (!regCity.trim()) errors.city = 'Requerido';
+        
+        if (!regPhone.trim()) errors.phone = 'Campo obligatorio';
+        else if (!/^\d{9}$/.test(regPhone)) errors.phone = 'Exactamente 9 dígitos numéricos';
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(regEmail)) {
-            setErrorMsg('El formato del correo es inválido.');
-            return;
-        }
+        if (!regEmail.trim()) errors.email = 'Campo obligatorio';
+        else if (!emailRegex.test(regEmail)) errors.email = 'Formato inválido';
 
-        const phoneRegex = /^[0-9+\-\s]+$/;
-        if (!phoneRegex.test(regPhone)) {
-            setErrorMsg('El celular debe contener solo números.');
-            return;
-        }
+        if (!regPassword.trim()) errors.password = 'Campo obligatorio';
+        else if (regPassword.length < 6) errors.password = 'Mínimo 6 caracteres';
 
-        if (regPassword.length < 6) {
-            setErrorMsg('La contraseña debe tener al menos 6 caracteres.');
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
             return;
         }
+        setFieldErrors({});
 
         try {
             const { data } = await api.post('/auth/register', {
@@ -167,7 +175,7 @@ export default function Login() {
                                 <a href="#" style={{ color: 'white', textDecoration: 'none' }}>forgot password ?</a>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-                                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); setErrorMsg(''); }} style={{ color: '#00d4ff', fontSize: '0.9rem', textDecoration: 'none', fontWeight: 'bold' }}>
+                                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); setErrorMsg(''); setFieldErrors({}); }} style={{ color: '#00d4ff', fontSize: '0.9rem', textDecoration: 'none', fontWeight: 'bold' }}>
                                     Crear cuenta
                                 </a>
                                 <button type="submit" style={{ padding: '10px 40px', backgroundColor: '#00d4ff', color: '#000', border: 'none', borderRadius: '50px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.05rem', boxShadow: '0 0 15px rgba(0, 212, 255, 0.5)' }}>
@@ -176,37 +184,50 @@ export default function Login() {
                             </div>
                         </form>
                     ) : (
-                        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                 <User size={20} color="#000000" style={{ position: 'absolute', left: '15px' }} />
-                                <input type="text" placeholder="Nombre y Apellido" value={regName} onChange={e => setRegName(e.target.value)} style={inputStyle} />
+                                <input type="text" placeholder="Nombre y Apellido" value={regName} onChange={e => { setRegName(e.target.value); setFieldErrors({...fieldErrors, name: ''}) }} style={inputStyle} />
                             </div>
                             <div style={{ display: 'flex', gap: '10px' }}>
                                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1 }}>
                                     <MapPin size={20} color="#000000" style={{ position: 'absolute', left: '15px' }} />
-                                    <input type="text" placeholder="País" value={regCountry} onChange={e => setRegCountry(e.target.value)} style={inputStyle} />
+                                    <select value={regCountry} onChange={e => { setRegCountry(e.target.value); setRegCity(''); setFieldErrors({...fieldErrors, country: '', city: ''}) }} style={{...inputStyle, appearance: 'none', cursor: 'pointer', color: regCountry ? '#000' : '#757575'}}>
+                                        <option value="" disabled>País</option>
+                                        {Object.keys(locationData).map(country => (
+                                            <option key={country} value={country}>{country}</option>
+                                        ))}
+                                    </select>
+{fieldErrors.country && <div style={{color: "#fca5a5", fontSize: "0.75rem", position: "absolute", bottom: "-18px", left: "15px"}}>{fieldErrors.country}</div>}
                                 </div>
                                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1 }}>
-                                    <input type="text" placeholder="Ciudad" value={regCity} onChange={e => setRegCity(e.target.value)} style={{...inputStyle, paddingLeft: '20px'}} />
+                                    <select value={regCity} onChange={e => { setRegCity(e.target.value); setFieldErrors({...fieldErrors, city: ''}) }} style={{...inputStyle, paddingLeft: '20px', appearance: 'none', cursor: 'pointer', color: regCity ? '#000' : '#757575'}} disabled={!regCountry}>
+                                        <option value="" disabled>Ciudad</option>
+                                        {regCountry && locationData[regCountry]?.map(city => (
+                                            <option key={city} value={city}>{city}</option>
+                                        ))}
+                                    </select>
+{fieldErrors.city && <div style={{color: "#fca5a5", fontSize: "0.75rem", position: "absolute", bottom: "-18px", left: "15px"}}>{fieldErrors.city}</div>}
                                 </div>
                             </div>
                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                 <Phone size={20} color="#000000" style={{ position: 'absolute', left: '15px' }} />
-                                <input type="text" placeholder="Celular" value={regPhone} onChange={e => setRegPhone(e.target.value)} style={inputStyle} />
+                                <input type="text" placeholder="Celular" value={regPhone} onChange={e => { setRegPhone(e.target.value); setFieldErrors({...fieldErrors, phone: ''}) }} style={inputStyle} />
+{fieldErrors.phone && <div style={{color: "#fca5a5", fontSize: "0.75rem", position: "absolute", bottom: "-18px", left: "15px"}}>{fieldErrors.phone}</div>}
                             </div>
                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                 <Mail size={20} color="#000000" style={{ position: 'absolute', left: '15px' }} />
-                                <input type="email" placeholder="Correo (Fundamental)" value={regEmail} onChange={e => setRegEmail(e.target.value)} style={inputStyle} />
+                                <input type="email" placeholder="Correo (Fundamental)" value={regEmail} onChange={e => { setRegEmail(e.target.value); setFieldErrors({...fieldErrors, email: ''}) }} style={inputStyle} />
                             </div>
                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                 <Lock size={20} color="#000000" style={{ position: 'absolute', left: '15px' }} />
-                                <input type={showPassword ? "text" : "password"} placeholder="Contraseña" value={regPassword} onChange={e => setRegPassword(e.target.value)} style={inputStyle} />
+                                <input type={showPassword ? "text" : "password"} placeholder="Contraseña" value={regPassword} onChange={e => { setRegPassword(e.target.value); setFieldErrors({...fieldErrors, password: ''}) }} style={inputStyle} />
                                 <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '15px', background: 'none', border: 'none', cursor: 'pointer', color: '#000000', padding: 0 }}>
                                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                 </button>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-                                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(false); setErrorMsg(''); }} style={{ color: '#00d4ff', fontSize: '0.9rem', textDecoration: 'none', fontWeight: 'bold' }}>
+                                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(false); setErrorMsg(''); setFieldErrors({}); }} style={{ color: '#00d4ff', fontSize: '0.9rem', textDecoration: 'none', fontWeight: 'bold' }}>
                                     Ya tengo cuenta
                                 </a>
                                 <button type="submit" style={{ padding: '10px 40px', backgroundColor: '#00d4ff', color: '#000', border: 'none', borderRadius: '50px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.05rem', boxShadow: '0 0 15px rgba(0, 212, 255, 0.5)' }}>
@@ -215,6 +236,7 @@ export default function Login() {
                             </div>
                         </form>
                     )}
+                    <GoogleSignIn />
                 </div>
             </div>
         </div>

@@ -30,6 +30,10 @@ public class UserManageService implements UserManageUseCase {
         entity.setPassword(passwordEncoder.encode(user.getPassword()));
         entity.setRole(user.getRole().name());
         entity.setActive(true);
+        if (user.getFullName() != null) entity.setFullName(user.getFullName());
+        if (user.getCountry() != null) entity.setCountry(user.getCountry());
+        if (user.getCity() != null) entity.setCity(user.getCity());
+        if (user.getPhone() != null) entity.setPhone(user.getPhone());
         
         entity = userRepository.save(entity);
         user.setId(entity.getId());
@@ -45,9 +49,35 @@ public class UserManageService implements UserManageUseCase {
         if (user.getPassword() != null && !user.getPassword().isEmpty()) {
             entity.setPassword(passwordEncoder.encode(user.getPassword()));
         }
-        entity.setRole(user.getRole().name());
-        userRepository.save(entity);
-        return user;
+        if (user.getRole() != null) {
+            entity.setRole(user.getRole().name());
+        }
+        entity.setActive(user.isActive());
+        if (!user.isActive()) {
+            if (user.getBanReason() != null) entity.setBanReason(user.getBanReason());
+            if (entity.getBannedAt() == null) entity.setBannedAt(java.time.LocalDateTime.now());
+        } else {
+            entity.setBanReason(null);
+            entity.setBannedAt(null);
+        }
+        if (user.getFullName() != null) entity.setFullName(user.getFullName());
+        if (user.getCountry() != null) entity.setCountry(user.getCountry());
+        if (user.getCity() != null) entity.setCity(user.getCity());
+        if (user.getPhone() != null) entity.setPhone(user.getPhone());
+        entity = userRepository.save(entity);
+        
+        return User.builder()
+            .id(entity.getId())
+            .username(entity.getUsername())
+            .role(com.dbshield.domain.model.Role.valueOf(entity.getRole()))
+            .isActive(entity.isActive())
+            .fullName(entity.getFullName())
+            .country(entity.getCountry())
+            .city(entity.getCity())
+            .phone(entity.getPhone())
+            .banReason(entity.getBanReason())
+            .bannedAt(entity.getBannedAt())
+            .build();
     }
 
     @Override
@@ -67,6 +97,12 @@ public class UserManageService implements UserManageUseCase {
                 .username(e.getUsername())
                 .role(com.dbshield.domain.model.Role.valueOf(e.getRole()))
                 .isActive(e.isActive())
+                .fullName(e.getFullName())
+                .country(e.getCountry())
+                .city(e.getCity())
+                .phone(e.getPhone())
+                .banReason(e.getBanReason())
+                .bannedAt(e.getBannedAt())
                 .build()
         ).collect(Collectors.toList());
     }

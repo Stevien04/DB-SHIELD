@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
+import { loadDatabaseConnections } from '../services/databaseConnections';
 import { AlertTriangle, ShieldCheck, Bug, Trash2, RefreshCcw, Activity, Eye, Terminal, X } from 'lucide-react';
 
 interface Threat {
-    id: number;
+    id: number | string;
     clientDatabaseId: number;
     tableName: string;
     recordPk: string;
@@ -11,9 +13,45 @@ interface Threat {
     isQuarantined: boolean;
     date: string;
     payload?: string;
+    source?: 'proxy' | 'simulation';
+    username?: string;
+    origin?: string;
 }
 
 export default function Quarantine() {
+    const [connections, setConnections] = useState<any[]>([]);
+    const [proxyDatabase, setProxyDatabase] = useState('');
+    const [connectionsError, setConnectionsError] = useState('');
+    const [proxyThreats, setProxyThreats] = useState<Threat[]>([]);
+    useEffect(() => {
+        let cancelled = false;
+        loadDatabaseConnections().then(({ databases }) => {
+            if (cancelled) return;
+            const active = databases.filter(db => db.active);
+            setConnections(active);
+            setProxyDatabase(active.length ? String(active[0].id) : '');
+        }).catch(() => { if (!cancelled) setConnectionsError('No se pudieron cargar las bases para consultar sus bloqueos.'); });
+        return () => { cancelled = true; };
+    }, []);
+    useEffect(() => {
+        setProxyThreats([]);
+        if (!proxyDatabase) return;
+        let cancelled = false;
+        const controller = new AbortController();
+        let timer: ReturnType<typeof setTimeout>;
+        const poll = async () => {
+            try {
+                const {data} = await api.get('/dam/protection', {params:{databaseId:proxyDatabase},signal:controller.signal});
+                if (!cancelled) {
+                    setConnectionsError('');
+                    setProxyThreats(data.events.map((event:any) => ({id:`proxy:${proxyDatabase}:${event.id}`,clientDatabaseId:Number(proxyDatabase),tableName:'No registrada',recordPk:'',threatType:event.rule,isQuarantined:true,date:new Date(event.timestamp).toLocaleString(),source:'proxy',username:event.username,origin:event.origin,payload:JSON.stringify({fecha:event.timestamp,base:data.databaseName,usuario:event.username,origen:event.origin,motivo:event.rule},null,2)})));
+                }
+            } catch { if (!cancelled) {setProxyThreats([]);setConnectionsError('No se pudieron consultar los bloqueos reales de esta base.');} }
+            if (!cancelled) timer=setTimeout(poll,2000);
+        };
+        void poll();
+        return () => {cancelled=true;controller.abort();clearTimeout(timer);};
+    }, [proxyDatabase]);
     const [threats, setThreats] = useState<Threat[]>(() => {
         const saved = localStorage.getItem('quarantine_threats');
         return saved ? JSON.parse(saved) : [];
@@ -35,11 +73,11 @@ export default function Quarantine() {
         localStorage.setItem('quarantine_threats', JSON.stringify(threats));
     }, [threats]);
 
-    const handleRestore = (id: number, pk: string) => {
+    const handleRestore = (id: number | string, pk: string) => {
         setConfirmDialog({
             isOpen: true,
             title: 'Restaurar Registro',
-            message: `¿Estás seguro de que deseas marcar el registro PK:${pk} como SEGURO y restaurarlo a la base de datos?`,
+            message: `¿Deseas retirar el registro local PK:${pk} de esta lista? Esta acción solo modifica los registros del navegador.`,
             isDanger: false,
             onConfirm: () => {
                 setThreats(prev => prev.filter(t => t.id !== id));
@@ -48,11 +86,11 @@ export default function Quarantine() {
         });
     };
 
-    const handlePurge = (id: number, pk: string) => {
+    const handlePurge = (id: number | string, pk: string) => {
         setConfirmDialog({
             isOpen: true,
             title: 'Depuración Irreversible',
-            message: `¿Deseas ELIMINAR permanentemente el registro malicioso PK:${pk} de la base de datos de origen? Esta acción no se puede deshacer.`,
+            message: `¿Deseas eliminar el registro local PK:${pk} de esta lista? No elimina datos de la base de origen.`,
             isDanger: true,
             onConfirm: () => {
                 setThreats(prev => prev.filter(t => t.id !== id));
@@ -86,6 +124,7 @@ export default function Quarantine() {
             payload: payload,
             isQuarantined: true,
             date: new Date().toLocaleTimeString()
+            ,source: 'simulation'
         };
         
         setThreats(prev => [newThreat, ...prev]);
@@ -119,7 +158,7 @@ export default function Quarantine() {
                         </div>
                         <div style={{ padding: '2rem' }}>
                             <p style={{ margin: '0 0 15px 0', color: '#475569', fontSize: '1rem', lineHeight: '1.5' }}>
-                                El motor heurístico bloqueó y aisló en cuarentena el siguiente fragmento de código antes de que pudiera comprometer la tabla <strong>{selectedThreat.tableName}</strong>:
+                                {selectedThreat.source === 'proxy' ? 'Detalles del bloqueo real. El proxy no almacena el SQL completo ni identifica la tabla afectada.' : `Detalles del registro local de la tabla ${selectedThreat.tableName}.`}
                             </p>
                             <div style={{ background: '#020617', padding: '1.5rem', borderRadius: '8px', color: '#4ade80', fontFamily: 'monospace', fontSize: '0.95rem', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', border: '1px solid #334155' }}>
                                 {selectedThreat.payload || '/* Payload binario encriptado o no disponible */'}
@@ -171,7 +210,7 @@ export default function Quarantine() {
                     <h1 style={{ margin: '0 0 10px 0', fontSize: '2rem', fontWeight: '400', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <Bug size={32} /> Bóveda de Cuarentena
                     </h1>
-                    <p style={{ margin: 0, fontSize: '1.1rem', opacity: 0.9 }}>Registros interceptados y aislados de forma segura (Vista en vivo).</p>
+                    <p style={{ margin: 0, fontSize: '1.1rem', opacity: 0.9 }}>Bloqueos reales del proxy y registros locales en una sola tabla.</p>
                 </div>
                 
                 {/* Botón de Simular Ataque */}
@@ -184,6 +223,15 @@ export default function Quarantine() {
             </div>
 
             <div style={{ flex: 1, backgroundColor: '#f8fafc', padding: '3rem' }}>
+                <section style={{ marginBottom: 20 }}>
+                    <label htmlFor="quarantine-database" style={{display:'block',fontWeight:600,marginBottom:10}}>Base de datos: bloqueos del proxy</label>
+                    <select id="quarantine-database" value={proxyDatabase} onChange={event=>setProxyDatabase(event.target.value)} disabled={!connections.length} style={{width:'100%',padding:12,border:'1px solid #cbd5e1',borderRadius:8,marginBottom:20}}>
+                        {!connections.length && <option value="">No hay bases activas</option>}
+                        {connections.map(db=><option key={db.id} value={db.id}>{db.name} — {db.host}</option>)}
+                    </select>
+                    {connectionsError && <p role="alert">{connectionsError}</p>}
+                    <p style={{color:'#64748b'}}>Bloqueos reales de la base seleccionada y registros locales de este navegador. Actualización cada 2 segundos.</p>
+                </section>
                 <table style={{ width: '100%', background: 'white', borderRadius: '12px', overflow: 'hidden', borderCollapse: 'collapse', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                     <thead style={{ background: '#f1f5f9', textAlign: 'left', color: '#475569' }}>
                         <tr>
@@ -191,17 +239,21 @@ export default function Quarantine() {
                             <th style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>DB ID</th>
                             <th style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>Tabla Afectada</th>
                             <th style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>Tipo Amenaza</th>
+                            <th style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>Usuario / Origen</th>
+                            <th style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>Fuente</th>
                             <th style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>Auditoría</th>
                             {isAdmin && <th style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>Acciones (DBA)</th>}
                         </tr>
                     </thead>
                     <tbody>
-                        {threats.map((t) => (
+                        {[...proxyThreats, ...threats].map((t) => (
                             <tr key={t.id} style={{ transition: 'background 0.2s', animation: 'fadeIn 0.5s ease-in' }}>
                                 <td style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>{t.date}</td>
                                 <td style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0', fontWeight: 'bold' }}>DB-{t.clientDatabaseId}</td>
                                 <td style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>{t.tableName}</td>
                                 <td style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0', color: '#e11d48', fontWeight: 'bold' }}>{t.threatType}</td>
+                                <td style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>{t.username || '—'}<br/>{t.origin || '—'}</td>
+                                <td style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>{t.source==='proxy'?'Proxy · bloqueo real':t.source==='simulation'?'Simulación':'Registro local'}</td>
                                 <td style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>
                                     <button 
                                         onClick={() => setSelectedThreat(t)} 
@@ -212,7 +264,7 @@ export default function Quarantine() {
                                 </td>
                                 {isAdmin && (
                                     <td style={{ padding: '1.2rem', borderBottom: '1px solid #e2e8f0' }}>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                        {t.source === 'proxy' ? <span>Consulta bloqueada</span> : <div style={{ display: 'flex', gap: '8px' }}>
                                             <button 
                                                 onClick={() => handleRestore(t.id, t.recordPk)} 
                                                 title="Marcar como Falso Positivo"
@@ -227,17 +279,17 @@ export default function Quarantine() {
                                             >
                                                 <Trash2 size={16} />
                                             </button>
-                                        </div>
+                                        </div>}
                                     </td>
                                 )}
                             </tr>
                         ))}
-                        {threats.length === 0 && (
+                        {threats.length === 0 && proxyThreats.length === 0 && (
                             <tr>
-                                <td colSpan={isAdmin ? 6 : 5} style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
+                                <td colSpan={isAdmin ? 8 : 7} style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
                                     <ShieldCheck size={64} color="#10b981" style={{ marginBottom: '15px', opacity: 0.5 }} />
                                     <h3 style={{ margin: 0, fontSize: '1.2rem' }}>No hay amenazas activas en cuarentena.</h3>
-                                    <p style={{ margin: '5px 0 0 0' }}>El motor del Antivirus está vigilando tus bases de datos.</p>
+                                    <p style={{ margin: '5px 0 0 0' }}>No hay bloqueos disponibles ni registros locales en esta vista.</p>
                                 </td>
                             </tr>
                         )}
